@@ -15,6 +15,7 @@ const statusConfig: Record<PropertyStatus, { label: string; color: string; icon:
   pending: { label: "Pending Approval", color: "bg-accent/20 text-accent-foreground", icon: Clock },
   approved: { label: "Approved", color: "bg-blue-100 text-blue-700", icon: CheckCircle },
   live: { label: "Live", color: "bg-green-100 text-green-700", icon: CheckCircle },
+  archived: { label: "Archived", color: "bg-secondary text-muted-foreground", icon: AlertCircle },
 };
 
 const HostDashboard = () => {

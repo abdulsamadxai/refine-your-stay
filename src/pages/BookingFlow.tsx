@@ -15,7 +15,8 @@ const BookingFlow = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { properties, createBooking, user } = useApp();
-  const property = properties.find((p) => p.id === id) || properties[0];
+  // FIX: Do NOT fall back to properties[0] — redirect if property not found to avoid crashes
+  const property = properties.find((p) => p.id === id);
   const [step, setStep] = useState(0);
   const [booking, setBooking] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,12 +29,18 @@ const BookingFlow = () => {
   const [cardName, setCardName] = useState(user?.name || "");
   const isMinStayMet = property && checkInDate && checkOutDate ? Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / 86400000) >= property.minStay : true;
 
-  // FIX 3: Read real guest count from URL params instead of hardcoding 2
+  // Read real guest count from URL params instead of hardcoding 2
   const guestCount = parseInt(searchParams.get("guests") || "2", 10);
 
-  // FIX 4: If date params are missing, redirect user back to property page
+  // If date params are missing, redirect back to property page
   if (!checkInDate || !checkOutDate) {
     navigate(`/property/${id}`, { replace: true });
+    return null;
+  }
+
+  // If property isn't loaded yet or doesn't exist, redirect to search
+  if (!property) {
+    navigate("/search", { replace: true });
     return null;
   }
 

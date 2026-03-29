@@ -67,20 +67,48 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         .from("profiles")
         .select("*")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      if (data) {
+      
+      let profileData = data;
+
+      // Fallback: If profile doesn't exist, create it from auth metadata
+      if (!profileData) {
+        console.warn("Profile not found for user, attempting to create one...");
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const { data: newProfile, error: createError } = await supabase
+            .from("profiles")
+            .insert({
+              id: authUser.id,
+              full_name: authUser.user_metadata?.full_name || "",
+              email: authUser.email || "",
+              role: authUser.user_metadata?.role || "guest",
+              avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser.id}`
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error("Failed to create missing profile:", createError);
+            throw createError;
+          }
+          profileData = newProfile;
+        }
+      }
+
+      if (profileData) {
         const appUser: AppUser = {
-          id: data.id,
-          name: data.full_name,
-          email: data.email,
-          role: data.role as UserRole,
-          avatar: data.avatar_url || data.full_name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
-          verified: data.verified,
-          bio: data.bio || "",
-          phone: data.phone || "",
-          joinedYear: data.joined_year || new Date().getFullYear(),
+          id: profileData.id,
+          name: profileData.full_name,
+          email: profileData.email,
+          role: profileData.role as UserRole,
+          avatar: profileData.avatar_url || profileData.full_name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+          verified: profileData.verified,
+          bio: profileData.bio || "",
+          phone: profileData.phone || "",
+          joinedYear: profileData.joined_year || new Date().getFullYear(),
         };
         setUser(appUser);
         return appUser;
@@ -494,17 +522,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth event:", event, "user:", session?.user?.id);
 
-      // Only act on identity-changing events, not background token refreshes
-      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-        // These don't change identity - just clear the safety timer if initial
-        return;
-      }
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") return;
 
+      setLoading(true); // Ensure loading is true while we handle identity changes
       try {
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          // Give the trigger a small head start, then try fetching
+          await new Promise(r => setTimeout(r, 500)); 
+          let profile = await fetchProfile(session.user.id);
+          
+          // One retry if missing, just in case trigger was slow
+          if (!profile) {
+            console.warn("Retrying profile fetch...");
+            await new Promise(r => setTimeout(r, 1000));
+            profile = await fetchProfile(session.user.id);
+          }
         } else {
-          // Signed out or no session
           setUser(null);
           setBookings([]);
           setConversations([]);
@@ -513,7 +546,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       } catch (err) {
         console.error("Auth state change error:", err);
       } finally {
-        // Clear loading after any identity-changing auth event
         clearTimeout(safetyTimer);
         setLoading(false);
       }

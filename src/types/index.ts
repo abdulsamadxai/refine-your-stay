@@ -19,7 +19,7 @@ export type PropertyType =
   | "Condo"
   | "Townhouse";
 
-export type PropertyStatus = "pending" | "approved" | "live";
+export type PropertyStatus = "pending" | "approved" | "live" | "archived";
 
 export interface Host {
   name: string;

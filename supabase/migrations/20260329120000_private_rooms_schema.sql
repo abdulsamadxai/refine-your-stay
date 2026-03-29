@@ -390,3 +390,26 @@ create policy "blocked_dates_mutate_host"
       where p.id = property_id and p.host_id = auth.uid()
     )
   );
+
+-- ─── Profile Creation Trigger ────────────────────────────────────────────────
+-- Automatically create a profile when a new user signs up
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, full_name, email, role, avatar_url)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    new.email,
+    coalesce(new.raw_user_meta_data->>'role', 'guest'),
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=' || new.id
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+

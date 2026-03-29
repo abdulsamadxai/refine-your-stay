@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, MessageSquare, User, MapPin, ShieldCheck, XCircle, Loader2 } from "lucide-react";
+import { CalendarDays, MessageSquare, User, MapPin, XCircle, Loader2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
@@ -165,7 +165,7 @@ const GuestDashboard = () => {
                         </span>
                         {c.lastMessageTime && (
                           <span className="text-xs text-muted-foreground font-body shrink-0">
-                            {format(parseISO(c.lastMessageTime), "MMM d, h:mm a")}
+                            {c.lastMessageTime}
                           </span>
                         )}
                       </div>

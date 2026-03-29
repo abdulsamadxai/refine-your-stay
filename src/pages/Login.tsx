@@ -35,12 +35,12 @@ const Login = () => {
 
     try {
       const { error: authError } = await login(email, password);
+      // Even on success, we reset submitting if we haven't redirected yet.
+      // The useEffect handles the actual redirect once the 'user' state is ready.
       if (authError) {
         setError(authError.message);
-        setIsSubmitting(false);
       }
-      // On success: onAuthStateChange fires SIGNED_IN → fetchProfile → sets user
-      // The useEffect above will then redirect based on role
+      setIsSubmitting(false);
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
       setIsSubmitting(false);
