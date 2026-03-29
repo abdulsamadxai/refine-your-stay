@@ -68,6 +68,8 @@ export type BookingStatus = "confirmed" | "pending" | "completed" | "cancelled";
 export interface Booking {
   id: string;
   propertyId: string;
+  hostId: string;
+  guestId: string;
   property: Property;
   checkIn: string;
   checkOut: string;

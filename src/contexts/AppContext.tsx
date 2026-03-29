@@ -60,7 +60,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const fetchProfile = useCallback(async (userId: string) => {
-    setLoading(true);
+    if (!user) setLoading(true);
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -125,15 +125,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProperties = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("properties")
         .select(`
           *,
           profiles (*),
           property_images (*),
           blocked_dates (*)
-        `)
-        .eq("status", "live");
+        `);
+      
+      // If we have a user, we want their properties (regardless of status)
+      // PLUS all other "live" properties for the guest search.
+      // However, to keep it simple and secure, we'll fetch everything the user is ALLOWED to see.
+      // Supabase RLS already handles the policy: (status = 'live') OR (host_id = auth.uid())
+      // So we just remove the .eq("status", "live") filter and let RLS do the work!
+      
+      const { data, error } = await query;
 
       if (error) throw error;
       if (data) {
@@ -424,35 +431,38 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     loadData();
   }, [user, fetchProperties, fetchBookings, fetchConversations, fetchNotifications]);
 
-  const initAuth = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      await fetchProfile(session.user.id);
-    }
-    setLoading(false);
-  }, [fetchProfile]);
+  // Remove initAuth to avoid race conditions with onAuthStateChange
+  // const initAuth = useCallback(async () => ...);
 
   useEffect(() => {
-    initAuth();
-
+    // Single source of truth for auth state - only listen to external auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Avoid redundant profile fetching if we're in the middle of a manual login/signup
-      if (event === "SIGNED_IN" && session?.user) {
-        // Only fetch if user state is currently null or different
-        if (!user || user.id !== session.user.id) {
-          await fetchProfile(session.user.id);
-        }
-      } else if (event === "SIGNED_OUT") {
+      console.log("Auth event:", event, session?.user?.id);
+      
+      if (session?.user) {
+        // We only fetch the profile if the local user state is empty or mismatched
+        // We use a functional update or a ref if we need the latest value within the listener
+        // But for now, just calling fetchProfile is enough as it has internal guards
+        await fetchProfile(session.user.id);
+      } else {
+        // No session
         setUser(null);
         setBookings([]);
         setConversations([]);
         setNotifications([]);
         setLoading(false);
       }
+      
+      // Safety latch to ensure loading is false after the initial check
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
-  }, [initAuth, fetchProfile, user]);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchProfile]); // REMOVED 'user' FROM DEPENDENCIES TO PREVENT LOOP
 
   const login = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });

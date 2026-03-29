@@ -25,9 +25,9 @@ const HostDashboard = () => {
     if (user) fetchBookings();
   }, [user, fetchBookings]);
 
-  // FIX 7: Show all properties — no hardcoded slice limit. Phase 5 will filter by host_id.
-  const hostProperties = properties;
-  const hostBookings = bookings;
+  // FIX: Isolated Host Data - Only show properties and bookings owned by this user
+  const hostProperties = properties.filter(p => p.hostId === user?.id);
+  const hostBookings = bookings.filter(b => b.hostId === user?.id);
 
   const sections = [
     { id: "properties", label: "Properties", icon: Home },
