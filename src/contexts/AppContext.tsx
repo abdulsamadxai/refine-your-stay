@@ -552,19 +552,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (data.user) {
-      // Safety net: explicitly upsert profile with the correct role in case the
-      // DB trigger hasn't fired yet (timing race between trigger and client).
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .upsert(
-          { id: data.user.id, full_name: name, email: email, role: role },
-          { onConflict: "id" }
-        );
-      if (profileError) {
-        console.error("Error upserting profile on signup:", profileError);
+      // Profile is now handled automatically by the Database Trigger 'on_auth_user_created'.
+      // If the user has a session, they are logged in. If not, they may need to confirm email.
+      if (!data.session) {
+        toast({ 
+          title: "Check your email", 
+          description: "We've sent you a confirmation link to complete your registration.",
+          variant: "default" 
+        });
       }
-      // DO NOT call fetchProfile here — onAuthStateChange SIGNED_IN event handles it.
-      // Calling it here would race with the auth listener and cause a deadlock.
     }
     return { error };
   }, [toast]);
