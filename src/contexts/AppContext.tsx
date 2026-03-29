@@ -521,57 +521,77 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Dedicated effect for properties that runs on mount and whenever fetchProperties changes
   useEffect(() => {
-    console.log("AppContext: Property fetch effect running (mount/init)");
+    console.log("AppContext: Global property fetch initiated");
     fetchProperties();
   }, [fetchProperties]);
 
   // Remove initAuth to avoid race conditions with onAuthStateChange
   // const initAuth = useCallback(async () => ...);
 
+  // Auth synchronization effect (Stage 1: Listen for session changes)
   useEffect(() => {
-    // Hard safety: ensure loading is ALWAYS cleared within 5 seconds no matter what
-    const safetyTimer = setTimeout(() => {
-      setLoading(false);
-    }, 5000);
-
-    // SINGLE source of truth for auth state.
-    // onAuthStateChange fires for: INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED
-    // We only fetch profile on events that change the user identity.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event fired:", event, "User ID:", session?.user?.id, "Has session:", !!session);
-
-      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") return;
-
-      setLoading(true); // Ensure loading is true while we handle identity changes
-      try {
-        if (session?.user) {
-          // Give the trigger a small head start, then try fetching
-          await new Promise(r => setTimeout(r, 500)); 
-          let profile = await fetchProfile(session.user.id);
-          
-          // One retry if missing, just in case trigger was slow
-          if (!profile) {
-            console.warn("Retrying profile fetch...");
-            await new Promise(r => setTimeout(r, 1000));
-            profile = await fetchProfile(session.user.id);
-          }
-        } else {
-          setUser(null);
-          setBookings([]);
-          setConversations([]);
-          setNotifications([]);
-        }
-      } catch (err) {
-        console.error("Auth state change error:", err);
-      } finally {
-        clearTimeout(safetyTimer);
-        setLoading(false);
+    console.log("AppContext: Initializing auth listener (sync-safe)");
+    
+    // Initial check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        console.log("AppContext: Initial session found for", session.user.id);
       }
     });
 
+    // Synchronous-safe listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("AppContext: Auth event (sync):", event, "UID:", session?.user?.id);
+      
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setBookings([]);
+        setConversations([]);
+        setNotifications([]);
+        setLoading(false);
+      }
+      
+      // We don't await anything here! 
+      // The session-watching effect below will pick up the change.
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Auth synchronization effect (Stage 2: Fetch profile when session exists)
+  useEffect(() => {
+    let active = true;
+
+    const syncProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
+        if (active) setLoading(false);
+        return;
+      }
+
+      console.log("AppContext: Syncing profile for", session.user.id);
+      setLoading(true);
+      
+      try {
+        const profile = await fetchProfile(session.user.id);
+        
+        if (active && !profile) {
+          // If profile trigger is still running, wait and try once more
+          await new Promise(r => setTimeout(r, 1000));
+          await fetchProfile(session.user.id);
+        }
+      } catch (err) {
+        console.error("AppContext: Sync error:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    syncProfile();
+
     return () => {
-      clearTimeout(safetyTimer);
-      subscription.unsubscribe();
+      active = false;
     };
   }, [fetchProfile]);
 
