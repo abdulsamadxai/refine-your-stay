@@ -186,33 +186,39 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const fetchProperties = useCallback(async () => {
+    console.log("AppContext: Starting fetchProperties...");
     try {
-      let query = supabase.from("properties").select(`
+      // Simplified query to check if complex joins are causing issues on live
+      let query = supabase.from("properties").select(`*`);
+      
+      console.log("AppContext: fetchProperties - about to await query...");
+      const { data, error } = await query;
+      
+      console.log("fetchProperties: fetched", data?.length || 0, "properties. Error:", error);
+      if (data && data.length > 0) {
+        console.log("fetchProperties: First property title:", data[0].title);
+        
+        // Re-fetch with full data if simple one works, or just proceed with mapped objects if simple is enough
+        const { data: fullData, error: fullError } = await supabase.from("properties").select(`
           *,
           profiles (*),
           property_images (*),
           blocked_dates (*)
         `);
-      
-      // If we have a user, we want their properties (regardless of status)
-      // PLUS all other "live" properties for the guest search.
-      // However, to keep it simple and secure, we'll fetch everything the user is ALLOWED to see.
-      // Supabase RLS already handles the policy: (status = 'live') OR (host_id = auth.uid())
-      // So we just remove the .eq("status", "live") filter and let RLS do the work!
-      
-      const { data, error } = await query;
-      
-      console.log("fetchProperties: fetched", data?.length || 0, "properties. Error:", error);
-      if (data && data.length > 0) {
-        console.log("fetchProperties: First property status:", data[0].status);
-      }
+        console.log("fetchProperties: Full data fetched. Items:", fullData?.length, "Error:", fullError);
 
-      if (error) throw error;
-      if (data) {
-        setProperties(data.map(mapDbToAppProperty));
+        if (fullError) throw fullError;
+        if (fullData) {
+          setProperties(fullData.map(mapDbToAppProperty));
+        }
+      } else {
+        console.warn("fetchProperties: Data is empty or null");
+        setProperties([]);
       }
+      
+      if (error) throw error;
     } catch (err) {
-      console.error("Error fetching properties:", err);
+      console.error("AppContext detail: Error in fetchProperties:", err);
     }
   }, [mapDbToAppProperty]);
 
@@ -502,8 +508,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, [user, fetchConversations]);
 
   useEffect(() => {
+    console.log("AppContext: loadData effect running. User logged in:", !!user);
     const loadData = async () => {
-      await fetchProperties();
       if (user) {
         await fetchBookings();
         await fetchConversations();
@@ -511,7 +517,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
     };
     loadData();
-  }, [user, fetchProperties, fetchBookings, fetchConversations, fetchNotifications]);
+  }, [user, fetchBookings, fetchConversations, fetchNotifications]);
+
+  // Dedicated effect for properties that runs on mount and whenever fetchProperties changes
+  useEffect(() => {
+    console.log("AppContext: Property fetch effect running (mount/init)");
+    fetchProperties();
+  }, [fetchProperties]);
 
   // Remove initAuth to avoid race conditions with onAuthStateChange
   // const initAuth = useCallback(async () => ...);
