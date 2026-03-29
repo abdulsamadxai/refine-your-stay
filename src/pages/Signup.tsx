@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Mail, Lock, User, Eye, EyeOff, Home, Briefcase } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, Home, Briefcase, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useApp } from "@/contexts/AppContext";
@@ -16,13 +16,35 @@ const Signup = () => {
   const [role, setRole] = useState<UserRole>("guest");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user, loading: appLoading } = useApp();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Robust redirection once user is authenticated and profile is loaded
+  useEffect(() => {
+    if (user && !appLoading) {
+      navigate(user.role === "host" ? "/host" : "/");
+    }
+  }, [user, appLoading, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) { setError("Please fill in all fields."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
-    signup(name, email, password, role);
-    navigate(role === "host" ? "/host" : "/");
+    
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      const { error: signupError } = await signup(name, email, password, role);
+      if (signupError) {
+        setError(signupError.message);
+        setIsSubmitting(false);
+      }
+      // Redirection is handled by the useEffect above
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred during signup.");
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -104,8 +126,19 @@ const Signup = () => {
                 </button>
               </div>
             </div>
-            <Button type="submit" className="w-full rounded-xl gradient-navy py-3 text-sm font-semibold text-primary-foreground shadow-none hover:opacity-90 font-body">
-              Create Account
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="w-full rounded-xl gradient-navy py-3 text-sm font-semibold text-primary-foreground shadow-none hover:opacity-90 font-body"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                "Create Account"
+              )}
             </Button>
           </form>
 

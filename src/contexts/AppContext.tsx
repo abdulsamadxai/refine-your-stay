@@ -60,6 +60,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const fetchProfile = useCallback(async (userId: string) => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -81,6 +82,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (err) {
       console.error("Error fetching profile:", err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -433,31 +436,37 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Avoid redundant profile fetching if we're in the middle of a manual login/signup
       if (event === "SIGNED_IN" && session?.user) {
-        await fetchProfile(session.user.id);
+        // Only fetch if user state is currently null or different
+        if (!user || user.id !== session.user.id) {
+          await fetchProfile(session.user.id);
+        }
       } else if (event === "SIGNED_OUT") {
         setUser(null);
         setBookings([]);
         setConversations([]);
         setNotifications([]);
+        setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [initAuth, fetchProfile]);
+  }, [initAuth, fetchProfile, user]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    } else if (data.user) {
+      await fetchProfile(data.user.id);
       toast({ title: "Success", description: "You have successfully logged in." });
     }
     return { error };
-  }, [toast]);
+  }, [toast, fetchProfile]);
 
   const signup = useCallback(async (name: string, email: string, password: string, role: UserRole) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -469,11 +478,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     });
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    } else if (data.user) {
+      await fetchProfile(data.user.id);
       toast({ title: "Success", description: "Account created successfully." });
     }
     return { error };
-  }, [toast]);
+  }, [toast, fetchProfile]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();

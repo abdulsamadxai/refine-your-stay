@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
@@ -14,6 +14,13 @@ const Login = () => {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user, loading: appLoading } = useApp();
+
+  useEffect(() => {
+    if (user && !appLoading) {
+      navigate(user.role === "host" ? "/host" : "/");
+    }
+  }, [user, appLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,9 +34,8 @@ const Login = () => {
       if (authError) {
         setError(authError.message);
         setIsSubmitting(false);
-      } else {
-        navigate("/");
       }
+      // Redirection is handled by the useEffect above
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
       setIsSubmitting(false);
