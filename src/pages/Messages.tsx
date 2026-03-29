@@ -83,9 +83,18 @@ const Messages = () => {
     // Real-time listener handles the UI update
   };
 
-  const selectConvo = (c: Conversation) => {
+  const selectConvo = async (c: Conversation) => {
     setActiveConvo(c);
     setShowChat(true);
+    // Mark all received messages in this conversation as read
+    if (c.unread > 0) {
+      await supabase
+        .from("messages")
+        .update({ read: true })
+        .eq("conversation_id", c.id)
+        .neq("sender_id", user?.id);
+      fetchConversations(); // refresh unread counts
+    }
   };
 
   return (
@@ -124,8 +133,9 @@ const Messages = () => {
                 }`}
               >
                 <img
-                  src={c.propertyImage}
+                  src={c.propertyImage || "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"}
                   alt=""
+                  onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"; }}
                   className="h-12 w-12 rounded-xl object-cover shrink-0"
                 />
                 <div className="min-w-0 flex-1">

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from "react";
-import type { Property, Booking, Conversation, Notification, Message, UserRole, AppUser, ManagedProperty, PropertyStatus } from "@/types";
-import { properties as defaultProperties, bookings as defaultBookings, conversations as defaultConversations, notifications as defaultNotifications } from "@/lib/data";
+import { formatDistanceToNow, parseISO } from "date-fns";
+import type { Property, Booking, Conversation, Notification, Message, UserRole, AppUser, ManagedProperty, PropertyStatus, PropertyReviewEntry } from "@/types";
 
 // Re-export types that other files currently import from AppContext
 export type { UserRole, AppUser, PropertyStatus, ManagedProperty };
@@ -19,8 +19,8 @@ interface AppContextValue extends AppState {
   signup: (name: string, email: string, password: string, role: UserRole) => Promise<{ error: any }>;
   logout: () => Promise<void>;
   addProperty: (p: Partial<ManagedProperty>) => Promise<{ data: any; error: any }>;
-  updatePropertyStatus: (id: string, status: PropertyStatus) => void;
-  toggleBlockedDate: (propertyId: string, date: string) => void;
+  updatePropertyStatus: (id: string, status: PropertyStatus) => Promise<void>;
+  toggleBlockedDate: (propertyId: string, date: string) => Promise<void>;
   createBooking: (propertyId: string, hostId: string, checkIn: Date, checkOut: Date, guests: number, pricePerNight: number, isInstant?: boolean) => Promise<{ data: any; error: any }>;
   cancelBooking: (bookingId: string) => Promise<{ error: any }>;
   fetchBookings: () => Promise<void>;
@@ -78,6 +78,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           role: data.role as UserRole,
           avatar: data.avatar_url || data.full_name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
           verified: data.verified,
+          bio: data.bio || "",
+          phone: data.phone || "",
           joinedYear: data.joined_year || new Date().getFullYear(),
         };
         setUser(appUser);
@@ -94,6 +96,32 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const images = dbProp.property_images || [];
     const primaryImage = images.find((img: any) => img.is_primary)?.image_url || images[0]?.image_url || "";
     
+    const reviewList = (dbProp.reviews || []) as any[];
+    const reviewEntries: PropertyReviewEntry[] | undefined = reviewList.length
+      ? [...reviewList]
+          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          .map((r: any) => {
+            const rev = r.profiles;
+            const name = rev?.full_name || "Guest";
+            const initials =
+              rev?.avatar_initials ||
+              name
+                .split(" ")
+                .map((w: string) => w[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase();
+            return {
+              id: r.id,
+              reviewerName: name,
+              reviewerInitials: initials,
+              rating: r.rating,
+              comment: r.comment ?? null,
+              createdAt: r.created_at,
+            };
+          })
+      : undefined;
+
     return {
       id: dbProp.id,
       title: dbProp.title,
@@ -112,6 +140,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       instantBook: dbProp.instant_book,
       description: dbProp.description,
       status: dbProp.status as any,
+      createdAt: dbProp.created_at,
       amenities: dbProp.amenities || [],
       blockedDates: (dbProp.blocked_dates || []).map((d: any) => d.blocked_date),
       hostId: dbProp.host_id,
@@ -122,15 +151,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         superhost: dbProp.profiles?.superhost || false,
         joinedYear: dbProp.profiles?.joined_year || 2026,
         responseRate: dbProp.profiles?.response_rate || 100,
-      }
+      },
+      ...(reviewEntries?.length ? { reviewEntries } : {}),
     };
   }, []);
 
   const fetchProperties = useCallback(async () => {
     try {
-      let query = supabase
-        .from("properties")
-        .select(`
+      let query = supabase.from("properties").select(`
           *,
           profiles (*),
           property_images (*),
@@ -162,7 +190,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           *,
           profiles (*),
           property_images (*),
-          blocked_dates (*)
+          blocked_dates (*),
+          reviews (
+            id,
+            rating,
+            comment,
+            created_at,
+            reviewer_id,
+            profiles!reviews_reviewer_id_fkey (
+              full_name,
+              avatar_url,
+              avatar_initials
+            )
+          )
         `)
         .eq("id", id)
         .single();
@@ -191,7 +231,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           type: n.type as Notification["type"],
           title: n.title,
           description: n.description,
-          time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatDistanceToNow(parseISO(n.created_at), { addSuffix: true }),
           read: n.read
         })));
       }
@@ -289,7 +329,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             id,
             property_images (image_url)
           ),
-          other_participant:profiles!${isHost ? "guest_id" : "host_id"} (*)
+          other_participant:profiles!${isHost ? "guest_id" : "host_id"} (*),
+          messages (id, read, sender_id)
         `)
         .eq(isHost ? "host_id" : "guest_id", user.id)
         .order("updated_at", { ascending: false });
@@ -304,7 +345,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           hostAvatar: c.other_participant?.avatar_url || (c.other_participant?.full_name?.[0] || "?"),
           lastMessage: c.last_message_text || "Started a conversation",
           lastMessageTime: c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
-          unread: 0,
+          unread: (c.messages || []).filter((m: any) => !m.read && m.sender_id !== user.id).length,
           messages: []
         })));
       }
@@ -391,6 +432,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const startConversation = useCallback(async (propertyId: string, hostId: string): Promise<string | null> => {
     if (!user) return null;
+    if (user.id === hostId) {
+      console.warn("Cannot start a conversation with yourself.");
+      return null;
+    }
     try {
       const { data: existing, error: checkError } = await supabase
         .from("conversations")
@@ -612,17 +657,50 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
-  const updatePropertyStatus = useCallback((id: string, status: PropertyStatus) => {
-    setProperties(prev => prev.map(p => p.id === id ? { ...p, status } : p));
-  }, []);
+  const updatePropertyStatus = useCallback(async (id: string, status: PropertyStatus) => {
+    try {
+      const { error } = await supabase
+        .from("properties")
+        .update({ status })
+        .eq("id", id);
+      if (error) throw error;
+      setProperties(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+      toast({ title: "Status Updated", description: `Property status changed to ${status}.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  }, [toast]);
 
-  const toggleBlockedDate = useCallback((propertyId: string, date: string) => {
-    setProperties(prev => prev.map(p => {
-      if (p.id !== propertyId) return p;
-      const blocked = p.blockedDates.includes(date) ? p.blockedDates.filter(d => d !== date) : [...p.blockedDates, date];
-      return { ...p, blockedDates: blocked };
-    }));
-  }, []);
+  const toggleBlockedDate = useCallback(async (propertyId: string, date: string) => {
+    try {
+      const property = properties.find(p => p.id === propertyId);
+      if (!property) return;
+      
+      const isCurrentlyBlocked = property.blockedDates.includes(date);
+      
+      if (isCurrentlyBlocked) {
+        const { error } = await supabase
+          .from("blocked_dates")
+          .delete()
+          .eq("property_id", propertyId)
+          .eq("blocked_date", date);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("blocked_dates")
+          .insert({ 
+            property_id: propertyId, 
+            blocked_date: date, 
+            reason: "host_blocked" 
+          });
+        if (error) throw error;
+      }
+      // Re-sync from DB to get authoritative state
+      await fetchProperties();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  }, [properties, fetchProperties, toast]);
 
   const createBooking = useCallback(async (propertyId: string, hostId: string, checkIn: Date, checkOut: Date, guests: number, pricePerNight: number, isInstant: boolean = false) => {
     if (!user) return { data: null, error: new Error("Not logged in") };
@@ -740,8 +818,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         { event: "*", schema: "public", table: "messages" },
         (payload: any) => {
           if (payload.eventType === "INSERT") {
-            // New message logic will be handled by re-fetching to maintain full context
-            fetchConversations();
+            const newMessage = payload.new;
+            // Only fetch if we received a message from someone else
+            if (newMessage && newMessage.sender_id !== user.id) {
+              fetchConversations();
+            }
+          } else if (payload.eventType === "UPDATE") {
+             fetchConversations();
           }
         }
       )
@@ -756,8 +839,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings" },
         (payload: any) => {
-          const b = payload.new as any;
-          if (b.guest_id === user.id || b.host_id === user.id) {
+          // Handle INSERT, UPDATE (new), and DELETE (old)
+          const b = payload.new || payload.old;
+          if (b && (b.guest_id === user.id || b.host_id === user.id)) {
             fetchBookings();
           }
         }
@@ -781,7 +865,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       fetchBookings, updateBookingStatus,
       fetchConversations, fetchMessages, startConversation,
       fetchNotifications, addNotification, markNotificationRead,
-    } as any}>
+    }}>
       {children}
     </AppContext.Provider>
   );

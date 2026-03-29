@@ -26,8 +26,9 @@ const amenityIcons: Record<string, React.ReactNode> = {
 const PropertyDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { fetchPropertyById, startConversation } = useApp();
+  const { fetchPropertyById, startConversation, user } = useApp();
   const [property, setProperty] = useState<ManagedProperty | null>(null);
+  const isOwnProperty = user?.id === property?.hostId;
   const [loading, setLoading] = useState(true);
   const [imgIdx, setImgIdx] = useState(0);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
@@ -68,7 +69,9 @@ const PropertyDetail = () => {
     );
   }
 
-  const images = property.images;
+  const images =
+    property.images?.length > 0 ? property.images : property.image ? [property.image] : [];
+  const galleryIdx = images.length > 0 ? imgIdx % images.length : 0;
   const checkIn = dateRange?.from;
   const checkOut = dateRange?.to;
   const nights = checkIn && checkOut ? Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86400000) : 0;
@@ -109,12 +112,27 @@ const PropertyDetail = () => {
         {/* Image gallery */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative overflow-hidden rounded-3xl">
           <div className="aspect-[16/9] sm:aspect-[2/1]">
-            <img src={images[imgIdx]} alt={property.title} className="h-full w-full object-cover" />
+            <img
+              src={images[galleryIdx] || "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"}
+              alt={property.title}
+              onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"; }}
+              className="h-full w-full object-cover"
+            />
           </div>
-          <button onClick={() => setImgIdx((i) => (i - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-card/80 p-2 backdrop-blur-sm transition-colors hover:bg-card">
+          <button
+            type="button"
+            disabled={images.length < 2}
+            onClick={() => setImgIdx((i) => (i - 1 + Math.max(images.length, 1)) % Math.max(images.length, 1))}
+            className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-card/80 p-2 backdrop-blur-sm transition-colors hover:bg-card disabled:opacity-40"
+          >
             <ChevronLeft className="h-5 w-5 text-foreground" />
           </button>
-          <button onClick={() => setImgIdx((i) => (i + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-card/80 p-2 backdrop-blur-sm transition-colors hover:bg-card">
+          <button
+            type="button"
+            disabled={images.length < 2}
+            onClick={() => setImgIdx((i) => (i + 1) % Math.max(images.length, 1))}
+            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-card/80 p-2 backdrop-blur-sm transition-colors hover:bg-card disabled:opacity-40"
+          >
             <ChevronRight className="h-5 w-5 text-foreground" />
           </button>
           <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
@@ -193,35 +211,39 @@ const PropertyDetail = () => {
               </div>
             </div>
 
-            {/* Reviews */}
+            {/* Reviews (loaded from Supabase `reviews` table on this property) */}
             <div className="mt-8">
               <h2 className="text-xl font-bold text-foreground font-body">Reviews <span className="text-muted-foreground font-normal">({property.reviews})</span></h2>
               <div className="mt-4 space-y-4">
-                {[
-                  { name: "Emily D.", date: "March 2026", text: "Amazing stay — everything was exactly as described. The location was perfect and our host was incredibly responsive. Would book again in a heartbeat.", rating: 5 },
-                  { name: "James A.", date: "February 2026", text: "Perfect location, very clean and modern. The views were absolutely incredible. Five-star experience from check-in to check-out.", rating: 5 },
-                  { name: "Rachel W.", date: "January 2026", text: "Truly a premium experience. Immaculate, beautifully designed, and the concierge service was outstanding. Worth every penny.", rating: 5 },
-                ].map((r) => (
-                  <div key={r.name} className="rounded-2xl border border-border p-5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground font-body">
-                          {r.name.split(" ").map((n) => n[0]).join("")}
+                {property.reviewEntries && property.reviewEntries.length > 0 ? (
+                  property.reviewEntries.map((r) => (
+                    <div key={r.id} className="rounded-2xl border border-border p-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground font-body">
+                            {r.reviewerInitials}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground font-body">{r.reviewerName}</p>
+                            <p className="text-xs text-muted-foreground font-body">
+                              {format(new Date(r.createdAt), "MMMM yyyy")}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground font-body">{r.name}</p>
-                          <p className="text-xs text-muted-foreground font-body">{r.date}</p>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: r.rating }).map((_, i) => (
+                            <Star key={i} className="h-3.5 w-3.5 fill-accent text-accent" />
+                          ))}
                         </div>
                       </div>
-                      <div className="flex gap-0.5">
-                        {Array.from({ length: r.rating }).map((_, i) => (
-                          <Star key={i} className="h-3.5 w-3.5 fill-accent text-accent" />
-                        ))}
-                      </div>
+                      {r.comment && (
+                        <p className="mt-3 text-sm text-muted-foreground leading-relaxed font-body">{r.comment}</p>
+                      )}
                     </div>
-                    <p className="mt-3 text-sm text-muted-foreground leading-relaxed font-body">{r.text}</p>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground font-body">No written reviews yet for this listing.</p>
+                )}
               </div>
             </div>
           </div>
@@ -338,13 +360,16 @@ const PropertyDetail = () => {
                   ? "Instant Book"
                   : "Request to Book"}
               </Button>
-              <Button
-                variant="ghost"
-                onClick={handleContactHost}
-                className="mt-2 w-full rounded-xl py-3 text-xs font-medium text-muted-foreground hover:bg-secondary/50 font-body"
-              >
-                Question? Contact Host
-              </Button>
+              {!isOwnProperty && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleContactHost} 
+                  className="mt-2 w-full rounded-xl py-3 text-xs font-medium text-muted-foreground hover:bg-secondary/50 font-body"
+                >
+                  Question? Contact Host
+                </Button>
+              )}
             </div>
           </div>
         </div>

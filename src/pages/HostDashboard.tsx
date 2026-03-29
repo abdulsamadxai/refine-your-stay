@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Home, CalendarDays, DollarSign, Plus, TrendingUp, Eye, Star, Clock, CheckCircle, AlertCircle, User } from "lucide-react";
+import { Home, CalendarDays, DollarSign, Plus, TrendingUp, Eye, Star, Clock, CheckCircle, AlertCircle, User, Loader2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import Navbar from "@/components/Navbar";
@@ -20,14 +21,23 @@ const HostDashboard = () => {
   const { properties, bookings, toggleBlockedDate, updatePropertyStatus, fetchBookings, updateBookingStatus, user } = useApp();
   const [activeSection, setActiveSection] = useState("properties");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (user) fetchBookings();
+    if (user) {
+      // `fetchProperties` is automatically triggered globally, but we can await it or just fetchBookings
+      fetchBookings().finally(() => setIsLoading(false));
+    }
   }, [user, fetchBookings]);
 
   // FIX: Isolated Host Data - Only show properties and bookings owned by this user
   const hostProperties = properties.filter(p => p.hostId === user?.id);
   const hostBookings = bookings.filter(b => b.hostId === user?.id);
+  const ratedProps = hostProperties.filter((p) => p.rating > 0);
+  const avgRating =
+    ratedProps.length > 0
+      ? (ratedProps.reduce((s, p) => s + p.rating, 0) / ratedProps.length).toFixed(2)
+      : "—";
 
   const sections = [
     { id: "properties", label: "Properties", icon: Home },
@@ -57,7 +67,7 @@ const HostDashboard = () => {
           {[
             { icon: TrendingUp, label: "Total Earnings", value: `$${hostBookings.reduce((s, b) => s + b.total, 0).toLocaleString()}`, sub: `${hostBookings.length} bookings` },
             { icon: Eye, label: "Properties", value: hostProperties.length.toString(), sub: `${hostProperties.filter(p => p.status === "live").length} live` },
-            { icon: Star, label: "Avg Rating", value: "4.95", sub: "From reviews" },
+            { icon: Star, label: "Avg Rating", value: avgRating, sub: "From your live listings" },
           ].map((s, i) => (
             <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
               className="card-3d rounded-2xl border border-border bg-card p-6 shadow-3d">
@@ -90,11 +100,26 @@ const HostDashboard = () => {
         {/* Properties */}
         {activeSection === "properties" && (
           <div className="mt-8 space-y-4">
-            {hostProperties.map((p) => {
+            {isLoading ? (
+              <div className="flex h-40 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : hostProperties.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-card py-20 text-center">
+                <Home className="h-12 w-12 text-muted-foreground opacity-30" />
+                <p className="mt-4 text-sm font-semibold text-foreground font-body">No properties yet</p>
+                <p className="mt-1 text-xs text-muted-foreground font-body">List your first property to start earning.</p>
+                <Link to="/host/add-property">
+                  <Button className="mt-6 gap-2 rounded-xl gradient-gold text-accent-foreground shadow-none hover:opacity-90 font-body font-semibold">
+                    <Plus className="h-4 w-4" /> Add Your First Property
+                  </Button>
+                </Link>
+              </div>
+            ) : hostProperties.map((p) => {
               const sc = statusConfig[p.status];
               return (
-                <div key={p.id} className="flex gap-4 rounded-2xl border border-border bg-card p-5">
-                  <img src={p.image} alt={p.title} className="h-20 w-28 rounded-xl object-cover shrink-0" />
+                <div key={p.id} className="flex gap-4 rounded-2xl border border-border bg-card p-5 shadow-3d card-3d">
+                  <img src={p.image || "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"} alt={p.title} onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"; }} className="h-20 w-28 rounded-xl object-cover shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-start justify-between">
                       <h3 className="text-sm font-semibold text-foreground font-body">{p.title}</h3>
@@ -128,7 +153,11 @@ const HostDashboard = () => {
         {/* Bookings */}
         {activeSection === "bookings" && (
           <div className="mt-8 space-y-4">
-            {hostBookings.length === 0 ? (
+            {isLoading ? (
+              <div className="flex h-40 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : hostBookings.length === 0 ? (
               <div className="rounded-2xl border border-border bg-card p-12 text-center">
                 <CalendarDays className="mx-auto h-12 w-12 text-muted-foreground opacity-20" />
                 <p className="mt-4 text-sm font-semibold text-foreground font-body">No bookings yet.</p>
@@ -137,10 +166,12 @@ const HostDashboard = () => {
             ) : hostBookings.map((b) => (
               <div key={b.id} className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-3d sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex gap-4">
-                  <img src={b.property.image} alt="" className="h-16 w-16 rounded-xl object-cover shrink-0" />
+                  <img src={b.property.image || "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"} alt="" onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"; }} className="h-16 w-16 rounded-xl object-cover shrink-0" />
                   <div>
                     <h3 className="text-sm font-semibold text-foreground font-body">{b.property.title}</h3>
-                    <p className="text-xs text-muted-foreground font-body">{b.checkIn} → {b.checkOut}</p>
+                    <p className="text-xs text-muted-foreground font-body">
+                      {format(parseISO(b.checkIn), "MMM d, yyyy")} → {format(parseISO(b.checkOut), "MMM d, yyyy")}
+                    </p>
                     <div className="mt-2 flex items-center gap-2">
                        <div className="flex -space-x-2">
                           <img src={(b as any).guest?.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100"} className="h-6 w-6 rounded-full border-2 border-background object-cover" />

@@ -9,7 +9,7 @@ import type { UserRole } from "@/types";
 
 const Signup = () => {
   const navigate = useNavigate();
-  const { signup } = useApp();
+  const { signup, user, loading: appLoading } = useApp();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,7 +17,6 @@ const Signup = () => {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { user, loading: appLoading } = useApp();
 
   // Robust redirection once user is authenticated and profile is loaded
   useEffect(() => {

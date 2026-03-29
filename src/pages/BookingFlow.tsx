@@ -22,6 +22,10 @@ const BookingFlow = () => {
   const [bookingError, setBookingError] = useState("");
   const checkInDate = searchParams.get("checkIn") ? new Date(searchParams.get("checkIn")!) : null;
   const checkOutDate = searchParams.get("checkOut") ? new Date(searchParams.get("checkOut")!) : null;
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [cardName, setCardName] = useState(user?.name || "");
   const isMinStayMet = property && checkInDate && checkOutDate ? Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / 86400000) >= property.minStay : true;
 
   // FIX 3: Read real guest count from URL params instead of hardcoding 2
@@ -40,6 +44,24 @@ const BookingFlow = () => {
   const isInstant = property.instantBook;
 
   const handlePay = async () => {
+    // Validate all card fields
+    if (!cardNumber.replace(/\s/g, "") || cardNumber.replace(/\s/g, "").length < 13) {
+      setBookingError("Please enter a valid card number.");
+      return;
+    }
+    if (!cardExpiry || !/^\d{2}\/\d{2}$/.test(cardExpiry)) {
+      setBookingError("Please enter a valid expiry date (MM/YY).");
+      return;
+    }
+    if (!cardCvc || cardCvc.length < 3) {
+      setBookingError("Please enter a valid CVC.");
+      return;
+    }
+    if (!cardName.trim()) {
+      setBookingError("Please enter the name on the card.");
+      return;
+    }
+
     setIsSubmitting(true);
     setBookingError("");
     try {
@@ -105,7 +127,7 @@ const BookingFlow = () => {
                   </div>
                 )}
                 <div className="mt-6 flex gap-4 rounded-xl border border-border p-4">
-                  <img src={property.image} alt={property.title} className="h-20 w-20 rounded-xl object-cover" />
+                  <img src={property.image || "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"} alt={property.title} onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"; }} className="h-20 w-20 rounded-xl object-cover" />
                   <div>
                     <h3 className="text-sm font-semibold text-foreground font-body">{property.title}</h3>
                     <p className="text-xs text-muted-foreground font-body">{property.location}</p>
@@ -170,23 +192,52 @@ const BookingFlow = () => {
                   <div>
                     <label className="text-xs font-medium text-muted-foreground font-body">Card Number</label>
                     <div className="relative mt-1">
-                      <Input placeholder="4242 4242 4242 4242" className="rounded-xl pl-10 font-body" />
+                      <Input 
+                        placeholder="4242 4242 4242 4242" 
+                        value={cardNumber}
+                        maxLength={19}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 16);
+                          setCardNumber(v.replace(/(.{4})/g, "$1 ").trim());
+                        }}
+                        className="rounded-xl pl-10 font-body" 
+                      />
                       <CreditCard className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground font-body">Expiry</label>
-                      <Input placeholder="MM / YY" className="mt-1 rounded-xl font-body" />
+                      <Input 
+                        placeholder="MM / YY" 
+                        value={cardExpiry}
+                        maxLength={5}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          setCardExpiry(v.length >= 3 ? v.slice(0,2) + "/" + v.slice(2) : v);
+                        }}
+                        className="mt-1 rounded-xl font-body" 
+                      />
                     </div>
                     <div>
                       <label className="text-xs font-medium text-muted-foreground font-body">CVC</label>
-                      <Input placeholder="123" className="mt-1 rounded-xl font-body" />
+                      <Input 
+                        placeholder="123" 
+                        value={cardCvc}
+                        maxLength={4}
+                        onChange={(e) => setCardCvc(e.target.value.replace(/\D/g, "").slice(0,4))}
+                        className="mt-1 rounded-xl font-body" 
+                      />
                     </div>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground font-body">Name on Card</label>
-                    <Input placeholder="Full name" defaultValue={user?.name || ""} className="mt-1 rounded-xl font-body" />
+                    <Input 
+                      placeholder="Full name" 
+                      value={cardName}
+                      onChange={(e) => setCardName(e.target.value)}
+                      className="mt-1 rounded-xl font-body" 
+                    />
                   </div>
                 </div>
                 <div className="mt-4 flex items-center gap-2 rounded-xl bg-secondary px-4 py-3">

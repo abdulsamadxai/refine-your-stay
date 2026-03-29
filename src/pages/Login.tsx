@@ -8,13 +8,12 @@ import { useApp } from "@/contexts/AppContext";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useApp();
+  const { login, user, loading: appLoading } = useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { user, loading: appLoading } = useApp();
 
   // Once user state is populated (auth event fired + profile fetched), redirect by role
   useEffect(() => {

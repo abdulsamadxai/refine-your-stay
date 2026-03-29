@@ -12,8 +12,8 @@ import { useEffect } from "react";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, properties, fetchProperties } = useApp();
-  const featured = properties.slice(0, 4);
+  const { user, properties } = useApp();
+  const featured = properties.filter(p => p.status === "live").slice(0, 4);
 
   // Role-based guard: hosts should never see the guest homepage
   useEffect(() => {
@@ -22,9 +22,7 @@ const Index = () => {
     }
   }, [user, navigate]);
 
-  useEffect(() => {
-    fetchProperties();
-  }, [fetchProperties]);
+  // Properties are automatically fetched by AppContext on mount/auth change
 
   return (
     <div className="min-h-screen bg-background">
@@ -98,23 +96,30 @@ const Index = () => {
       </section>
 
       {/* Featured */}
-      <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-foreground sm:text-4xl">Featured Properties</h2>
-            <p className="mt-2 text-muted-foreground font-body">Handpicked stays trending this season.</p>
+      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 bg-background/50 backdrop-blur-sm rounded-3xl mb-20">
+        <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
+          <div className="text-center sm:text-left">
+            <h2 className="text-2xl font-bold text-foreground font-body sm:text-3xl">Featured Properties</h2>
+            <p className="mt-2 text-sm text-muted-foreground font-body">Our most verified and booked properties this month.</p>
           </div>
           <Link to="/search">
-            <Button variant="ghost" className="gap-1 text-sm text-primary font-body hover:bg-primary/5">
-              View All <ArrowRight className="h-4 w-4" />
+            <Button variant="outline" className="gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-foreground hover:bg-secondary font-body shadow-none">
+              Explore All <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
         </div>
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {featured.map((p, i) => (
-            <PropertyCard key={p.id} property={p} index={i} />
-          ))}
-        </div>
+
+        {featured.length > 0 ? (
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {featured.map((p, i) => (
+              <PropertyCard key={p.id} property={p} index={i} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-16 text-center">
+            <p className="text-sm text-muted-foreground font-body">New properties coming soon. Check back shortly.</p>
+          </div>
+        )}
       </section>
 
       {/* CTA */}

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Upload, Plus, X } from "lucide-react";
@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const steps = ["Basic Info", "Images", "Pricing", "Amenities"];
 const allAmenities = ["WiFi", "Pool", "Gym", "Kitchen", "Parking", "Air Conditioning", "Washer", "Concierge", "Hot Tub", "Fireplace", "Sauna", "Garden", "BBQ", "EV Charger", "Workspace", "Wine Cellar"];
-const propertyTypes = ["Villa", "Apartment", "Condo", "Penthouse", "Townhouse"] as const;
+const propertyTypes = ["Villa", "Apartment", "Condo", "Penthouse", "Townhouse", "Chalet", "Bungalow"] as const;
 
 const AddProperty = () => {
   const navigate = useNavigate();
@@ -32,7 +32,14 @@ const AddProperty = () => {
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const urls = selectedFiles.map(file => URL.createObjectURL(file));
+    setPreviewUrls(urls);
+    return () => urls.forEach(url => URL.revokeObjectURL(url));
+  }, [selectedFiles]);
 
   const toggleAmenity = (a: string) => {
     setSelectedAmenities((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
@@ -192,9 +199,9 @@ const AddProperty = () => {
                 <p className="mt-1 text-xs text-muted-foreground font-body">High-quality images attract more guests (Limit: 10).</p>
                 
                 <div className="mt-6 grid grid-cols-3 gap-4">
-                  {selectedFiles.map((file, i) => (
+                  {previewUrls.map((url, i) => (
                     <div key={i} className="group relative aspect-square overflow-hidden rounded-2xl border border-border bg-secondary">
-                      <img src={URL.createObjectURL(file)} alt="Preview" className="h-full w-full object-cover" />
+                      <img src={url} alt="Preview" className="h-full w-full object-cover" />
                       <button 
                         onClick={() => removeFile(i)}
                         className="absolute right-1 top-1 rounded-full bg-destructive/80 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"

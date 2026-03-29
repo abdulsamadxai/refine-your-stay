@@ -53,10 +53,8 @@ const SearchPage = () => {
 
   const filtered = useMemo(() => {
     let result = properties.filter((p) => {
-      // Basic status check
-      if (p.status !== "live" && p.status !== "pending") { // Allowing both for dev visibility
-        if (!p.id.startsWith("p-seed")) return false; 
-      }
+      // Only show live properties to guests
+      if (p.status !== "live") return false;
       
       // Price
       if (p.price < priceRange[0] || p.price > priceRange[1]) return false;
@@ -93,7 +91,8 @@ const SearchPage = () => {
       if (sortBy === "price_desc") return b.price - a.price;
       if (sortBy === "rating") return b.rating - a.rating;
       if (sortBy === "reviews") return b.reviews - a.reviews;
-      return 0; // Default: Order of insertion
+      // "newest" sort: most recently created first
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     });
   }, [properties, priceRange, minStay, selectedType, searchParams, guests, bedrooms, bathrooms, selectedAmenities, onlyVerified, sortBy]);
 

@@ -15,8 +15,8 @@ const ProfileSettings = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || "",
-    phone: "", // We'll need to fetch this if it exists in the real DB
-    bio: "",   // We'll need to fetch this if it exists in the real DB
+    phone: user?.phone || "",
+    bio: user?.bio || "",
   });
 
   const handleSave = async (e: React.FormEvent) => {
@@ -25,8 +25,8 @@ const ProfileSettings = () => {
     const { error } = await updateProfile({
       full_name: formData.name,
       phone: formData.phone,
-      // bio: formData.bio, // Add bio to schema if it doesn't exist yet
-    } as any);
+      bio: formData.bio,
+    });
 
     if (error) {
       toast({
@@ -80,7 +80,7 @@ const ProfileSettings = () => {
         <div className="relative group">
           <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full ring-4 ring-background shadow-xl gradient-navy text-2xl font-bold text-primary-foreground font-body transition-transform group-hover:scale-105">
             {user?.avatar?.length && user.avatar.length > 2 ? (
-              <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
+              <img src={user.avatar} alt={user.name} onError={(e) => { e.currentTarget.style.display = 'none'; }} className="h-full w-full object-cover" />
             ) : (
               <span>{user?.avatar || "GU"}</span>
             )}

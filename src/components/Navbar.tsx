@@ -132,7 +132,7 @@ const Navbar = () => {
                 variant="ghost"
                 size="icon"
                 className="rounded-full text-muted-foreground hover:text-foreground"
-                onClick={() => { logout(); navigate("/"); }}
+                onClick={async () => { await logout(); navigate("/login", { replace: true }); }}
               >
                 <LogOut className="h-4 w-4" />
               </Button>

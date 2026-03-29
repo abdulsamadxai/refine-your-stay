@@ -50,15 +50,28 @@ export interface Property {
   hostId: string;
   amenities: string[];
   description: string;
+  /** Added in Phase 3 — ISO timestamp from DB */
+  createdAt?: string;
   /** Added in Phase 0 Fix 8 — dates the host has blocked */
   blockedDates?: string[];
 }
 
 // ─── Managed Property (Host Dashboard) ───────────────────────────────────────
 
+/** Loaded from `reviews` + reviewer profile on property detail (not used on list cards). */
+export interface PropertyReviewEntry {
+  id: string;
+  reviewerName: string;
+  reviewerInitials: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
 export interface ManagedProperty extends Property {
   status: PropertyStatus;
   blockedDates: string[];
+  reviewEntries?: PropertyReviewEntry[];
 }
 
 // ─── Booking Types ───────────────────────────────────────────────────────────
@@ -74,6 +87,10 @@ export interface Booking {
   checkIn: string;
   checkOut: string;
   guests: number;
+  nights: number;
+  pricePerNight: number;
+  subtotal: number;
+  serviceFee: number;
   status: BookingStatus;
   total: number;
 }
@@ -126,5 +143,7 @@ export interface AppUser {
   role: UserRole;
   avatar: string;
   verified: boolean;
+  bio?: string;
+  phone?: string;
   joinedYear: number;
 }

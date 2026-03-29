@@ -48,6 +48,7 @@ const PropertyCard = ({ property, index = 0 }: PropertyCardProps) => {
               loading="lazy"
               width={800}
               height={600}
+              onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600"; }}
               className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-foreground/20 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />

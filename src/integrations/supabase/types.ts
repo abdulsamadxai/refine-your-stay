@@ -272,6 +272,7 @@ export type Database = {
           superhost: boolean
           updated_at: string
           verified: boolean
+          bio: string | null
         }
         Insert: {
           avatar_initials?: string | null
@@ -287,6 +288,7 @@ export type Database = {
           superhost?: boolean
           updated_at?: string
           verified?: boolean
+          bio?: string | null
         }
         Update: {
           avatar_initials?: string | null
@@ -302,6 +304,7 @@ export type Database = {
           superhost?: boolean
           updated_at?: string
           verified?: boolean
+          bio?: string | null
         }
         Relationships: []
       }
@@ -326,6 +329,7 @@ export type Database = {
           title: string
           updated_at: string
           verified: boolean
+          bio: string | null
         }
         Insert: {
           amenities?: string[] | null
