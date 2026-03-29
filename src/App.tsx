@@ -30,17 +30,17 @@ const App = () => (
         <AppProvider>
           <ErrorBoundary>
             <Routes>
-              {/* Protected Home Route - Shows Login First */}
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              {/* Protected Home Route - Guest Only */}
+              <Route path="/" element={<ProtectedRoute requiredRole="guest"><Index /></ProtectedRoute>} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/property/:id" element={<PropertyDetail />} />
 
-              {/* Protected Guest/General Routes */}
-              <Route path="/booking/:id" element={<ProtectedRoute><BookingFlow /></ProtectedRoute>} />
+              {/* Protected Guest Routes */}
+              <Route path="/booking/:id" element={<ProtectedRoute requiredRole="guest"><BookingFlow /></ProtectedRoute>} />
               <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><GuestDashboard /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute requiredRole="guest"><GuestDashboard /></ProtectedRoute>} />
 
               {/* Protected Host Routes */}
               <Route path="/host" element={<ProtectedRoute requiredRole="host"><HostDashboard /></ProtectedRoute>} />

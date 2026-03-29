@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ShieldCheck, Star, Clock, Sparkles, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,16 @@ import heroImage from "@/assets/hero-villa.jpg";
 import { useEffect } from "react";
 
 const Index = () => {
-  const { properties, fetchProperties } = useApp();
+  const navigate = useNavigate();
+  const { user, properties, fetchProperties } = useApp();
   const featured = properties.slice(0, 4);
+
+  // Role-based guard: hosts should never see the guest homepage
+  useEffect(() => {
+    if (user?.role === "host") {
+      navigate("/host", { replace: true });
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     fetchProperties();

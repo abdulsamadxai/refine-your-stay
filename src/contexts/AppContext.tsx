@@ -59,8 +59,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    if (!user) setLoading(true);
+  // fetchProfile: pure data fetcher - does NOT manage loading state
+  // Loading is managed exclusively by the onAuthStateChange effect below
+  const fetchProfile = useCallback(async (userId: string): Promise<AppUser | null> => {
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -70,7 +71,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) throw error;
       if (data) {
-        setUser({
+        const appUser: AppUser = {
           id: data.id,
           name: data.full_name,
           email: data.email,
@@ -78,12 +79,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           avatar: data.avatar_url || data.full_name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
           verified: data.verified,
           joinedYear: data.joined_year || new Date().getFullYear(),
-        });
+        };
+        setUser(appUser);
+        return appUser;
       }
+      return null;
     } catch (err) {
       console.error("Error fetching profile:", err);
-    } finally {
-      setLoading(false);
+      return null;
     }
   }, []);
 
@@ -435,45 +438,57 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // const initAuth = useCallback(async () => ...);
 
   useEffect(() => {
-    // Single source of truth for auth state - only listen to external auth changes
+    // Hard safety: ensure loading is ALWAYS cleared within 5 seconds no matter what
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
+    // SINGLE source of truth for auth state.
+    // onAuthStateChange fires for: INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED
+    // We only fetch profile on events that change the user identity.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event:", event, session?.user?.id);
-      
-      if (session?.user) {
-        // We only fetch the profile if the local user state is empty or mismatched
-        // We use a functional update or a ref if we need the latest value within the listener
-        // But for now, just calling fetchProfile is enough as it has internal guards
-        await fetchProfile(session.user.id);
-      } else {
-        // No session
-        setUser(null);
-        setBookings([]);
-        setConversations([]);
-        setNotifications([]);
-        setLoading(false);
+      console.log("Auth event:", event, "user:", session?.user?.id);
+
+      // Only act on identity-changing events, not background token refreshes
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        // These don't change identity - just clear the safety timer if initial
+        return;
       }
-      
-      // Safety latch to ensure loading is false after the initial check
-      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT") {
+
+      try {
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        } else {
+          // Signed out or no session
+          setUser(null);
+          setBookings([]);
+          setConversations([]);
+          setNotifications([]);
+        }
+      } catch (err) {
+        console.error("Auth state change error:", err);
+      } finally {
+        // Clear loading after any identity-changing auth event
+        clearTimeout(safetyTimer);
         setLoading(false);
       }
     });
 
     return () => {
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
-  }, [fetchProfile]); // REMOVED 'user' FROM DEPENDENCIES TO PREVENT LOOP
+  }, [fetchProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // onAuthStateChange (SIGNED_IN event) will call fetchProfile and set user state.
+    // Login page watches user state changes to redirect.
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else if (data.user) {
-      await fetchProfile(data.user.id);
-      toast({ title: "Success", description: "You have successfully logged in." });
     }
     return { error };
-  }, [toast, fetchProfile]);
+  }, [toast]);
 
   const signup = useCallback(async (name: string, email: string, password: string, role: UserRole) => {
     const { data, error } = await supabase.auth.signUp({
@@ -488,12 +503,26 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     });
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else if (data.user) {
-      await fetchProfile(data.user.id);
-      toast({ title: "Success", description: "Account created successfully." });
+      return { error };
+    }
+
+    if (data.user) {
+      // Safety net: explicitly upsert profile with the correct role in case the
+      // DB trigger hasn't fired yet (timing race between trigger and client).
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert(
+          { id: data.user.id, full_name: name, email: email, role: role },
+          { onConflict: "id" }
+        );
+      if (profileError) {
+        console.error("Error upserting profile on signup:", profileError);
+      }
+      // DO NOT call fetchProfile here — onAuthStateChange SIGNED_IN event handles it.
+      // Calling it here would race with the auth listener and cause a deadlock.
     }
     return { error };
-  }, [toast, fetchProfile]);
+  }, [toast]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();

@@ -5,6 +5,7 @@ import type { UserRole } from "@/types";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  /** If set, the route requires exactly this role. Others are redirected. */
   requiredRole?: UserRole;
 }
 
@@ -23,14 +24,13 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
     );
   }
 
+  // Not logged in → send to login, preserving intended destination
   if (!user) {
-    // Redirect to login but save the current location so we can redirect back after login
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Role mismatch: redirect to the user's correct home
   if (requiredRole && user.role !== requiredRole) {
-    // If user is a guest trying to access host pages, redirect to home
-    // If user is a host trying to access guest-only pages (if any), redirect to host dashboard
     return <Navigate to={user.role === "host" ? "/host" : "/"} replace />;
   }
 
@@ -38,3 +38,4 @@ const ProtectedRoute = ({ children, requiredRole }: ProtectedRouteProps) => {
 };
 
 export default ProtectedRoute;
+

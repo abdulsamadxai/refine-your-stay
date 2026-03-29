@@ -22,7 +22,11 @@ const Signup = () => {
   // Robust redirection once user is authenticated and profile is loaded
   useEffect(() => {
     if (user && !appLoading) {
-      navigate(user.role === "host" ? "/host" : "/");
+      if (user.role === "host") {
+        navigate("/host", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     }
   }, [user, appLoading, navigate]);
 

@@ -16,16 +16,21 @@ const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user, loading: appLoading } = useApp();
 
+  // Once user state is populated (auth event fired + profile fetched), redirect by role
   useEffect(() => {
     if (user && !appLoading) {
-      navigate(user.role === "host" ? "/host" : "/");
+      if (user.role === "host") {
+        navigate("/host", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     }
   }, [user, appLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) { setError("Please fill in all fields."); return; }
-    
+
     setIsSubmitting(true);
     setError("");
 
@@ -35,7 +40,8 @@ const Login = () => {
         setError(authError.message);
         setIsSubmitting(false);
       }
-      // Redirection is handled by the useEffect above
+      // On success: onAuthStateChange fires SIGNED_IN → fetchProfile → sets user
+      // The useEffect above will then redirect based on role
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
       setIsSubmitting(false);
