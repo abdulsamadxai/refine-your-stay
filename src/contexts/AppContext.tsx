@@ -54,6 +54,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authSession, setAuthSession] = useState<Session | null>(null);
   const [properties, setProperties] = useState<ManagedProperty[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -543,6 +544,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("AppContext: Auth event (sync):", event, "UID:", session?.user?.id);
       
+      // Update our reactive session state to trigger the sync effect below
+      setAuthSession(session);
+
       if (event === "SIGNED_OUT") {
         setUser(null);
         setBookings([]);
@@ -550,9 +554,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setNotifications([]);
         setLoading(false);
       }
-      
-      // We don't await anything here! 
-      // The session-watching effect below will pick up the change.
     });
 
     return () => subscription.unsubscribe();
@@ -563,23 +564,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     let active = true;
 
     const syncProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      // Use the session from our reactive state
+      const currentSession = authSession;
       
-      if (!session?.user) {
+      if (!currentSession?.user) {
         if (active) setLoading(false);
         return;
       }
 
-      console.log("AppContext: Syncing profile for", session.user.id);
+      console.log("AppContext: Syncing profile for", currentSession.user.id);
       setLoading(true);
       
       try {
-        const profile = await fetchProfile(session.user.id);
+        const profile = await fetchProfile(currentSession.user.id);
         
         if (active && !profile) {
           // If profile trigger is still running, wait and try once more
           await new Promise(r => setTimeout(r, 1000));
-          await fetchProfile(session.user.id);
+          await fetchProfile(currentSession.user.id);
         }
       } catch (err) {
         console.error("AppContext: Sync error:", err);
@@ -593,7 +595,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       active = false;
     };
-  }, [fetchProfile]);
+  }, [authSession, fetchProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
