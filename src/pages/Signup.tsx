@@ -42,8 +42,11 @@ const Signup = () => {
       if (signupError) {
         setError(signupError.message);
         setIsSubmitting(false);
+      } else {
+        // If successful but no immediate redirect (e.g. session delay or email confirmation)
+        // we reset submitting so the user isn't stuck.
+        setTimeout(() => setIsSubmitting(false), 2000);
       }
-      // Redirection is handled by the useEffect above
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred during signup.");
       setIsSubmitting(false);

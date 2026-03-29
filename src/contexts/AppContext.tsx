@@ -99,6 +99,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (profileData) {
+        console.log("fetchProfile: Profile found for", userId, "role:", profileData.role);
         const appUser: AppUser = {
           id: profileData.id,
           name: profileData.full_name,
@@ -200,6 +201,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       // So we just remove the .eq("status", "live") filter and let RLS do the work!
       
       const { data, error } = await query;
+      
+      console.log("fetchProperties: fetched", data?.length || 0, "properties. Error:", error);
+      if (data && data.length > 0) {
+        console.log("fetchProperties: First property status:", data[0].status);
+      }
 
       if (error) throw error;
       if (data) {
@@ -520,7 +526,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     // onAuthStateChange fires for: INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED
     // We only fetch profile on events that change the user identity.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event:", event, "user:", session?.user?.id);
+      console.log("Auth event fired:", event, "User ID:", session?.user?.id, "Has session:", !!session);
 
       if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") return;
 

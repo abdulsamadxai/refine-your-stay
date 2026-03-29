@@ -52,9 +52,13 @@ const SearchPage = () => {
   };
 
   const filtered = useMemo(() => {
+    console.log("SearchPage: Total properties from context:", properties.length);
     let result = properties.filter((p) => {
       // Only show live properties to guests
-      if (p.status !== "live") return false;
+      if (p.status !== "live") {
+        console.log("SearchPage: skipping non-live property:", p.title, "Status:", p.status);
+        return false;
+      }
       
       // Price
       if (p.price < priceRange[0] || p.price > priceRange[1]) return false;
@@ -84,6 +88,8 @@ const SearchPage = () => {
       
       return true;
     });
+
+    console.log("SearchPage: Filtered properties count:", result.length);
 
     // Sorting
     return [...result].sort((a, b) => {

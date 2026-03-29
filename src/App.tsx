@@ -26,8 +26,8 @@ const App = () => (
         <AppProvider>
           <ErrorBoundary>
             <Routes>
-              {/* Protected Home Route - Guest Only */}
-              <Route path="/" element={<ProtectedRoute requiredRole="guest"><Index /></ProtectedRoute>} />
+              {/* Public Routes */}
+              <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/search" element={<SearchPage />} />
